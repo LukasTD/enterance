@@ -33,10 +33,44 @@ async fn main() -> Result<()> {
 		return Ok(());
 	}
 
-	let no_update = args().any(|arg| arg == "--no-update");
+	// Parse CLI args: --no-update, --username, --password
+	let mut username_arg: Option<String> = None;
+	let mut password_arg: Option<String> = None;
+	let mut no_update = false;
+	let mut it = args().skip(1).peekable();
+	while let Some(arg) = it.next() {
+		match arg.as_str() {
+			"--no-update" => {
+				no_update = true;
+			}
+			"--username" => {
+				if let Some(next) = it.peek() {
+					if !next.starts_with("--") {
+						username_arg = Some(it.next().unwrap());
+					}
+				}
+			}
+			"--password" => {
+				if let Some(next) = it.peek() {
+					if !next.starts_with("--") {
+						password_arg = Some(it.next().unwrap());
+					}
+				}
+			}
+			_ => {
+				if let Some(val) = arg.strip_prefix("--username=") { username_arg = Some(val.to_string()); }
+				else if let Some(val) = arg.strip_prefix("--password=") { password_arg = Some(val.to_string()); }
+			}
+		}
+	}
+
 	let client = reqwest::Client::builder().cookie_store(true).build()?;
 
-	if !exists(get_login_token_path()?)? {
+	// If credentials are provided via CLI, prefer them regardless of existing token
+	if let (Some(u), Some(p)) = (username_arg.clone(), password_arg.clone()) {
+		println!("Logging in...");
+		login(&client, u, p).await?;
+	} else if !exists(get_login_token_path()?)? {
 		print!("Login: ");
 		let username = read_line()?;
 		print!("Password: ");
