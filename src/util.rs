@@ -14,6 +14,7 @@ use std::env;
 use std::fs::File;
 use std::io::{Read, Write, stdin, stdout};
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 #[derive(Hash, PartialEq, Eq, Clone, Debug, Deserialize, Serialize)]
 pub struct Config {
@@ -25,6 +26,13 @@ pub struct Config {
 	pub account: String,
 	pub path: Option<String>,
 	pub lang: Option<String>,
+}
+
+static SELECTED_AUTH_USER: OnceLock<String> = OnceLock::new();
+
+pub fn set_selected_auth_user(user: &str) {
+    // Set once; subsequent calls are ignored intentionally
+    let _ = SELECTED_AUTH_USER.set(sanitize_username(user));
 }
 
 impl Config {
@@ -161,7 +169,29 @@ pub fn get_cache_file_path() -> Result<PathBuf> {
 }
 
 pub fn get_login_token_path() -> Result<PathBuf> {
-	Ok(get_my_dir()?.join("auth"))
+    // Prefer process-selected user first
+    if let Some(user) = SELECTED_AUTH_USER.get() {
+        return Ok(get_login_token_path_for_user(user)?);
+    }
+    // Fallback to env var for backwards compatibility
+    if let Ok(user) = env::var("ENTERANCE_AUTH_USER") {
+        return Ok(get_login_token_path_for_user(&user)?);
+    }
+    Ok(get_my_dir()?.join("auth"))
+}
+
+pub fn get_login_token_path_for_user(user: &str) -> Result<PathBuf> {
+    let mut fname = String::from("auth_");
+    fname.push_str(&sanitize_username(user));
+    Ok(get_my_dir()?.join(fname))
+}
+
+fn sanitize_username(user: &str) -> String {
+    let mut s = user.trim().to_lowercase();
+    for ch in ['<', '>', ':', '"', '/', '\\', '|', '?', '*'] {
+        s = s.replace(ch, "_");
+    }
+    if s.is_empty() { String::from("user") } else { s }
 }
 
 pub fn get_config_path() -> Result<PathBuf> {

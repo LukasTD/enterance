@@ -11,7 +11,7 @@ use crate::util::*;
 
 use anyhow::{Result, Error};
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::Serializer;
 use std::env::args;
 use std::fs::{File, exists};
@@ -68,6 +68,9 @@ async fn main() -> Result<()> {
 
 	// If credentials are provided via CLI, prefer them regardless of existing token
 	if let (Some(u), Some(p)) = (username_arg.clone(), password_arg.clone()) {
+		if let Some(ref u) = username_arg {
+			set_selected_auth_user(u);
+		}
 		println!("Logging in...");
 		login(&client, u, p).await?;
 	} else if !exists(get_login_token_path()?)? {
